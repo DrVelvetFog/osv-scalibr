@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	cpb "github.com/google/osv-scalibr/binary/proto/config_go_proto"
 	"github.com/google/osv-scalibr/clients/clienttest"
 	"github.com/google/osv-scalibr/clients/datasource"
 	"github.com/google/osv-scalibr/clients/resolution"
@@ -964,5 +965,48 @@ func TestEnricher_Enrich_LocalModules(t *testing.T) {
 	})
 	if diff := cmp.Diff(wantInventory, inv); diff != "" {
 		t.Errorf("%s.Enrich() diff (-want +got):\n%s", enrichy.Name(), diff)
+	}
+}
+
+func TestNewEnableCacheConfig(t *testing.T) {
+	defaultCfg := configtest.NewFakePluginConfig()
+	defaultCfg.ProtoConfig = &cpb.PluginConfig{
+		DisableGoogleAuth: true,
+	}
+	eDefault, err := pomxml.New(defaultCfg)
+	if err != nil {
+		t.Fatalf("pomxml.New(default) failed: %v", err)
+	}
+	defaultEnricher := eDefault.(*pomxml.Enricher)
+	if defaultEnricher.MavenClient.IsCacheEnabled() {
+		t.Errorf("MavenClient.IsCacheEnabled() = true by default, want false")
+	}
+	if defaultEnricher.DepClient.(*resolution.MavenRegistryClient).IsCacheEnabled() {
+		t.Errorf("DepClient.IsCacheEnabled() = true by default, want false")
+	}
+
+	enabledCfg := configtest.NewFakePluginConfig()
+	enabledCfg.ProtoConfig = &cpb.PluginConfig{
+		DisableGoogleAuth: true,
+		PluginSpecific: []*cpb.PluginSpecificConfig{
+			{
+				Config: &cpb.PluginSpecificConfig_PomXmlNet{
+					PomXmlNet: &cpb.POMXMLNetConfig{
+						EnableCache: true,
+					},
+				},
+			},
+		},
+	}
+	eEnabled, err := pomxml.New(enabledCfg)
+	if err != nil {
+		t.Fatalf("pomxml.New(enable_cache=true) failed: %v", err)
+	}
+	enabledEnricher := eEnabled.(*pomxml.Enricher)
+	if !enabledEnricher.MavenClient.IsCacheEnabled() {
+		t.Errorf("MavenClient.IsCacheEnabled() = false with enable_cache=true, want true")
+	}
+	if !enabledEnricher.DepClient.(*resolution.MavenRegistryClient).IsCacheEnabled() {
+		t.Errorf("DepClient.IsCacheEnabled() = false with enable_cache=true, want true")
 	}
 }
